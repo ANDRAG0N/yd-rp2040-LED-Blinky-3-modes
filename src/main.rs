@@ -1,10 +1,8 @@
 #![no_std]
 #![no_main]
 
-use embedded_hal::digital::OutputPin;
-// use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal::digital::{InputPin, OutputPin};
 use panic_halt as _;
-
 use vcc_gnd_yd_rp2040::entry;
 use vcc_gnd_yd_rp2040::{
     hal::{
@@ -16,7 +14,7 @@ use vcc_gnd_yd_rp2040::{
     Pins, XOSC_CRYSTAL_FREQ,
 };
 
-#[entry] // Начало работы прошивки.
+#[entry] // начало работы прошивки с этого момента 
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap(); // Видимо тут мы подключаемся к переферии то есть к vcc_gnd_yd_rp2040 пинам чтобы не подключатся вручную
     let core = pac::CorePeripherals::take().unwrap();
@@ -24,7 +22,7 @@ fn main() -> ! {
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
     
     let clocks = init_clocks_and_plls(
-        XOSC_CRYSTAL_FREQ,
+        XOSC_CRYSTAL_FREQ, // Исходная частота кварца, от которой всё начинается
         pac.XOSC, // Модуль кварца	Включает внешний генератор и усиливает герцовку подключённых модулей чтобы они работали быстрее
         pac.CLOCKS,
         pac.PLL_SYS, // Умножает частоту для системной шины (обычно до 125 MHz)
@@ -37,7 +35,7 @@ fn main() -> ! {
     .unwrap();
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
-    
+
     let sio = Sio::new(pac.SIO);
     let pins = Pins::new(
         pac.IO_BANK0,
@@ -46,30 +44,35 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let mut in1 = pins.gpio0.into_push_pull_output();
-    let mut in2 = pins.gpio1.into_push_pull_output();
-    let mut in3 = pins.gpio2.into_push_pull_output();
-    let mut in4 = pins.gpio3.into_push_pull_output();
+    let mut led_pin = pins.led.into_push_pull_output(); led_pin.set_low().unwrap(); // Светодиод на GPIO25 сразу выключен.
 
-    let sequence = [
-        [true, false, false, false],
-        [true, true, false, false],
-        [false, true, false, false],
-        [false, true, true, false],
-        [false, false, true, false],
-        [false, false, true, true],
-        [false, false, false, true],
-        [true, false, false, true],
-    ];
+    let mut usr_btn = pins.user_key.into_pull_up_input(); // Кнопка управления светодиодом.
+
+    let mut prev_state = false;
+    let mut _mode = 0;
 
     loop {
-        for step in &sequence {
-            let _ = in1.set_state(step[0].into());
-            let _ = in2.set_state(step[1].into());
-            let _ = in3.set_state(step[2].into());
-            let _ = in4.set_state(step[3].into());
+        let curr_state = usr_btn.is_low().unwrap();
 
-            delay.delay_ms(1);
+        if curr_state == true && prev_state == false {
+            if _mode < 2 {
+                _mode += 1;
+            } else if _mode == 2 {
+                _mode = 0;
+            }
+        } 
+
+        prev_state = curr_state;
+
+        if _mode == 0 { // Погашенный светодиод.
+            led_pin.set_low().unwrap();
+        } else if _mode == 1 { // Светодиод светится постоянно.
+            led_pin.set_high().unwrap();
+        } else if _mode == 2 { // Cветодиод мерцает.
+            led_pin.set_high().unwrap();
+            delay.delay_ms(50);
+            led_pin.set_low().unwrap();
+            delay.delay_ms(50);
         }
     }
 }
