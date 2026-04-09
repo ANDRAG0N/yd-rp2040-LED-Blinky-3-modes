@@ -70,4 +70,6 @@ The firmware monitors the USER button state and cycles through 3 modes on each p
    - Mode 1: Sets GPIO25 HIGH (LED on)
    - Mode 2: Toggles GPIO25 with 50ms delays (fast blinking)
 
-## Project Structure
+## License
+
+MIT
